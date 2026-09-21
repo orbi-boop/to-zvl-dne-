@@ -1,0 +1,73 @@
+<!doctype html>
+<html lang="cs"><head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
+<title>Zvládneš to – Bludiště úzkosti</title>
+<style>
+html,body{margin:0;width:100%;height:100%;overflow:hidden;background:#050509;color:white;font-family:system-ui,sans-serif;touch-action:none}
+canvas{display:block;width:100%;height:100%}
+#hud{position:fixed;top:12px;left:50%;transform:translateX(-50%);padding:8px 14px;border:1px solid #ffffff22;border-radius:20px;background:#07070dcc;font-size:13px;z-index:5}
+#tip{position:fixed;bottom:15px;left:50%;transform:translateX(-50%);opacity:.65;font-size:12px;z-index:5}
+#joy{position:fixed;left:24px;bottom:28px;width:130px;height:130px;border-radius:50%;background:#ffffff10;border:1px solid #ffffff25;z-index:6}
+#knob{position:absolute;left:40px;top:40px;width:50px;height:50px;border-radius:50%;background:#ffffff2a;border:1px solid #ffffff55}
+#finish{display:none;position:fixed;inset:0;z-index:20;align-items:center;justify-content:center;text-align:center;background:radial-gradient(circle,#1d2938,#080a10 65%,#030305);padding:30px}
+#finish h1{font-size:clamp(30px,8vw,64px);margin:0 0 18px;text-shadow:0 0 25px #8ff}
+#finish p{font-size:clamp(18px,4vw,28px);line-height:1.5;color:#dce9f5}
+button{margin-top:18px;padding:12px 22px;border:0;border-radius:22px;background:#bafcff;color:#071015;font-weight:700;font-size:16px}
+</style></head><body>
+<canvas id="game"></canvas><div id="hud">Najdi cestu ven • drž si odstup</div>
+<div id="joy"><div id="knob"></div></div><div id="tip">Mobil: joystick • Počítač: WASD / šipky</div>
+<div id="finish"><div><h1>ZVLÁDL/A JSI TO ❤️</h1><p>Zvládl jsi to tady, zvládneš to i v realitě.</p><p style="font-size:15px;opacity:.65">Tvůj další krok se počítá.</p><button id="again">Hrát znovu</button></div></div>
+<script>
+"use strict";
+const c=document.getElementById("game"),x=c.getContext("2d"),joy=document.getElementById("joy"),knob=document.getElementById("knob"),finish=document.getElementById("finish");
+let W=innerWidth,H=innerHeight,D=Math.min(devicePixelRatio||1,2);
+function size(){W=innerWidth;H=innerHeight;c.width=W*D;c.height=H*D;c.style.width=W+"px";c.style.height=H+"px";x.setTransform(D,0,0,D,0,0)}addEventListener("resize",size);size();
+
+const maze=[
+"###############","#S#     #     #","# # ### # ### #","#   #   #   # #","### # ##### # #",
+"#   #     # # #","# ### ### # # #","#     #   #   #","# ### # ##### #",
+"# #   #       #","# # ######### #","# #           #","# ########### #","#            G#","###############"];
+const S=64,R=maze.length,C=maze[0].length;
+const phrases=["Jsi silnější, než si teď myslíš.","Tohle zvládneš krok za krokem.","Nemusíš být perfektní.","Zpomal. Nadechni se. Pokračuj.","Nejsi na to sám / sama.","Tvůj další krok se počítá.","Nemusíš vyřešit všechno najednou.","Máš právo si odpočinout.","Jsi víc než svoje nejhorší myšlenky.","Zkus ještě jeden malý krok.","To, co říkají druzí, neurčuje tvoji hodnotu.","I malý pokrok je pokrok.","Vydrž. Cesta ven existuje."];
+const texts=[];
+for(let r=0;r<R;r++)for(let q=0;q<C;q++)if(maze[r][q]==" "&&(r+q)%6==0)texts.push({x:q*S+S/2,y:r*S+18,t:phrases[texts.length%phrases.length]});
+let p={x:1.5*S,y:1.5*S,r:14},d={x:11.5*S,y:13.5*S,r:20},cam={x:p.x,y:p.y},keys={},jx=0,jy=0,win=false,pulse=0,last=performance.now();
+
+function wall(px,py){let q=Math.floor(px/S),r=Math.floor(py/S);return q<0||r<0||q>=C||r>=R||maze[r][q]=="#"}
+function hit(e,px,py){let z=e.r*.7;return [[px-e.r,py],[px+e.r,py],[px,py-e.r],[px,py+e.r],[px-z,py-z],[px+z,py+z],[px-z,py+z],[px+z,py-z]].some(a=>wall(a[0],a[1]))}
+function move(e,dx,dy){if(!hit(e,e.x+dx,e.y))e.x+=dx;if(!hit(e,e.x,e.y+dy))e.y+=dy}
+function next(sx,sy,gx,gy){
+ let q=[[sx,sy]],prev=new Map(),seen=new Set([sx+","+sy]),dirs=[[1,0],[-1,0],[0,1],[0,-1]];
+ while(q.length){let [a,b]=q.shift();if(a==gx&&b==gy)break;for(let [u,v] of dirs){let n=a+u,m=b+v,k=n+","+m;if(n>=0&&m>=0&&n<C&&m<R&&maze[m][n]!="#"&&!seen.has(k)){seen.add(k);prev.set(k,a+","+b);q.push([n,m])}}}
+ let cur=gx+","+gy;if(!seen.has(cur))return[sx,sy];while(prev.has(cur)&&prev.get(cur)!=sx+","+sy)cur=prev.get(cur);return cur.split(",").map(Number)
+}
+function reset(){p.x=1.5*S;p.y=1.5*S;d.x=11.5*S;d.y=13.5*S;cam.x=p.x;cam.y=p.y;win=false;finish.style.display="none"}
+document.getElementById("again").onclick=reset;
+addEventListener("keydown",e=>{keys[e.key.toLowerCase()]=1;if(e.key.startsWith("Arrow")||e.key==" ")e.preventDefault()});
+addEventListener("keyup",e=>keys[e.key.toLowerCase()]=0);
+let tid=null;
+function joymove(e){let r=joy.getBoundingClientRect(),a=e.clientX-(r.left+r.width/2),b=e.clientY-(r.top+r.height/2),m=Math.hypot(a,b)||1,z=45;if(m>z){a=a/m*z;b=b/m*z}jx=a/z;jy=b/z;knob.style.transform=`translate(${a}px,${b}px)`}
+joy.onpointerdown=e=>{tid=e.pointerId;joy.setPointerCapture(tid);joymove(e)};joy.onpointermove=e=>{if(e.pointerId==tid)joymove(e)};joy.onpointerup=()=>{tid=null;jx=jy=0;knob.style.transform="translate(0,0)"};
+
+function update(dt){
+ if(win)return;
+ let a=jx,b=jy;if(keys.w||keys.arrowup)b--;if(keys.s||keys.arrowdown)b++;if(keys.a||keys.arrowleft)a--;if(keys.d||keys.arrowright)a++;
+ let m=Math.hypot(a,b)||1;if(m>1){a/=m;b/=m}move(p,a*145*dt,b*145*dt);
+ let psx=Math.floor(p.x/S),psy=Math.floor(p.y/S),dsx=Math.floor(d.x/S),dsy=Math.floor(d.y/S),n=next(dsx,dsy,psx,psy),tx=n[0]*S+S/2,ty=n[1]*S+S/2,dx=tx-d.x,dy=ty-d.y,mm=Math.hypot(dx,dy)||1;
+ move(d,dx/mm*82*dt,dy/mm*82*dt);
+ if(Math.hypot(p.x-d.x,p.y-d.y)<34)reset();
+ if(Math.hypot(p.x-13.5*S,p.y-13.5*S)<30){win=true;finish.style.display="flex"}
+ cam.x+=(p.x-cam.x)*Math.min(1,dt*5);cam.y+=(p.y-cam.y)*Math.min(1,dt*5);pulse+=dt
+}
+function pos(a,b){return[a-cam.x+W/2,b-cam.y+H/2]}
+function draw(){
+ x.clearRect(0,0,W,H);let g=x.createRadialGradient(W/2,H/2,20,W/2,H/2,Math.max(W,H));g.addColorStop(0,"#151826");g.addColorStop(1,"#030307");x.fillStyle=g;x.fillRect(0,0,W,H);
+ for(let r=0;r<R;r++)for(let q=0;q<C;q++){let [sx,sy]=pos(q*S,r*S);if(maze[r][q]=="#"){x.fillStyle="#0b0b12";x.fillRect(sx,sy,S,S);x.strokeStyle="#25263a";x.strokeRect(sx+.5,sy+.5,S-1,S-1)}else{x.fillStyle="#111421";x.fillRect(sx,sy,S,S)}}
+ x.textAlign="center";x.font="bold 11px system-ui";for(let t of texts){let [sx,sy]=pos(t.x,t.y);x.shadowBlur=15;x.shadowColor="#72e8ff";x.fillStyle="#d9fbff";x.fillText(t.t,sx,sy);x.shadowBlur=0}
+ let [gx,gy]=pos(13.5*S,13.5*S);x.shadowBlur=25;x.shadowColor="#73ff9d";x.strokeStyle="#73ff9d";x.lineWidth=4;x.beginPath();x.arc(gx,gy,25+Math.sin(pulse*3)*4,0,7);x.stroke();x.shadowBlur=0;x.fillStyle="#b9ffd0";x.font="bold 12px system-ui";x.fillText("VEN",gx,gy+4);
+ let [px,py]=pos(p.x,p.y);x.shadowBlur=18;x.shadowColor="#8ff7ff";x.fillStyle="#bffcff";x.beginPath();x.arc(px,py,p.r,0,7);x.fill();x.shadowBlur=0;
+ let [dx,dy]=pos(d.x,d.y);x.shadowBlur=28;x.shadowColor="#ff315d";x.fillStyle="#250711";x.beginPath();x.arc(dx,dy,d.r,0,7);x.fill();x.shadowBlur=0;x.fillStyle="#ff4d72";x.beginPath();x.arc(dx-7,dy-3,3,0,7);x.arc(dx+7,dy-3,3,0,7);x.fill();
+ let v=x.createRadialGradient(W/2,H/2,Math.min(W,H)*.18,W/2,H/2,Math.max(W,H)*.7);v.addColorStop(0,"transparent");v.addColorStop(1,"rgba(0,0,0,.72)");x.fillStyle=v;x.fillRect(0,0,W,H)
+}
+function loop(t){let dt=Math.min(.035,(t-last)/1000);last=t;update(dt);draw();requestAnimationFrame(loop)}requestAnimationFrame(loop);
+</script></body></html>
